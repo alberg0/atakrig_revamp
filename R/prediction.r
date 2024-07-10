@@ -257,11 +257,8 @@ ataKriging.local <- function(x, unknown, ptVgm, nmax=10, longlat=FALSE, showProg
 ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE, oneCondition=FALSE,
                          meanVal=NULL, auxRatioAdj=TRUE, showProgress=FALSE, nopar=FALSE, clarkAntiLog=FALSE) {
   
-  timestamp_start <- Sys.time()
-  cat(sprintf("Inizio ore: %s\n", timestamp_start))
-  
+    
   stopifnot(nmax > 0)
-  cat("nmax > 0\n")
   
   if(nmax < Inf) {
     cat("usign ataCoKriging local\n")
@@ -273,13 +270,11 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
   if(is(ptVgms, "ataKrigVgm")) ptVgms <- extractPointVgm(ptVgms)
   
   # sort areaId in ascending order.
-  cat("Sorting areaId in ascending order\n")
   for (i in 1:length(x)) {
     x[[i]]$areaValues <- x[[i]]$areaValues[sort.int(x[[i]]$areaValues[,1], index.return = TRUE)$ix,]
   }
   
   # combine all data together.
-  cat("Combining all data together\n")
   varIds <- sort(names(x))
   xAll <- list(areaValues=NULL, discretePoints=NULL)
   for (id in varIds) {
@@ -300,7 +295,6 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
   sampleIds <- sort(unique(xAll$discretePoints$var_areaId))
   nSamples <- length(sampleIds)		# number of all samples
   nVars <- length(x) # number of variables
-  cat(sprintf("Number of samples: %d, Number of variables: %d\n", nSamples, nVars))
   
   ## Kriging system: C * wmu = D
   if(oneCondition) {
@@ -311,7 +305,6 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     D <- matrix(0, nrow=nSamples+nVars, ncol=1)
   }
   
-  cat("Populating C matrix\n")
   # C matrix
   sampleIndex <- list()
   for(i in 1:nSamples) {
@@ -340,7 +333,6 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     D[nSamples + which(unknownVarId == varIds)] <- 1
   }
   
-  cat("End of C matrix population\n")
   
   unknownAreaIds <- sort(unique(unknown[,1]))
   
@@ -355,18 +347,15 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     }
     
     # solving
-    cat("Solving system for unknown area ID: ", unknownAreaIds[k], "\n")
-    solvedByGInv <- FALSE
-    wmu <- try(solve(C, D), FALSE)
-    if(is(wmu, "try-error")) {
-      cat("Solving by GInv\n")
-      wmu <- MASS::ginv(C) %*% D
-      solvedByGInv <- TRUE
-    }
-    
-    if(!solvedByGInv){
-      cat("Solved without GInv\n")
-    }
+    # cat("Solving system for unknown area ID: ", unknownAreaIds[k], "\n")
+    # solvedByGInv <- FALSE
+    # wmu <- try(solve(C, D), FALSE)
+    # if(is(wmu, "try-error")) {
+    #   cat("Solving by GInv\n")
+    #   wmu <- MASS::ginv(C) %*% D
+    #   solvedByGInv <- TRUE
+    # }
+    wmu <- MASS::ginv(C) %*% D
     
     # estimation
     if(oneCondition) {
@@ -425,9 +414,7 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
   
   unknownCenter <- calcAreaCentroid(unknown)
   estResults <- merge(unknownCenter, estResults)
-  
-  timestamp_end <- Sys.time()
-  cat(sprintf("Fine ore: %s\n", timestamp_end))
+
   
   return(estResults)
 }

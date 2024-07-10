@@ -1,4 +1,4 @@
-Package: atakrig_revamp
+Package: atakrig.revamp
 Type: Package
 Title: Area-to-Area Kriging
 Version: 0.9.8

@@ -345,6 +345,32 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
       ptVgm <- ptVgms[[crossName(sampleI$varId[1], unknownVarId)]]
       D[i] <- ataCov(sampleI[,2:4], curUnknown, ptVgm, longlat = longlat)
     }
+
+    # Soglie di mal condizionamento
+    cond_number_threshold <- 1e4
+    determinant_threshold <- 1e-10
+    eigenvalue_threshold <- 1e-10
+  
+    # Calcoli
+    kappa <- calc_condition_number(C)
+    det_C <- calc_determinant(C)
+    eigenvalues <- calc_eigenvalues(C)
+    
+    # Verifica delle condizioni
+    if (kappa > cond_number_threshold) {
+      cat("La matrice è mal condizionata: Numero di condizionamento elevato\n")
+      cat("Numero di condizionamento:", kappa, "\n")
+    }
+  
+    if (abs(det_C) < determinant_threshold) {
+      cat("La matrice è mal condizionata: Determinante molto piccolo\n")
+      cat("Determinante della matrice:", det_C, "\n")
+    }
+  
+    if (any(abs(eigenvalues) < eigenvalue_threshold)) {
+      cat("La matrice è mal condizionata: Autovalori molto piccoli\n")
+      cat("Autovalori della matrice:", eigenvalues, "\n")
+    }
     
     # solving
     # cat("Solving system for unknown area ID: ", unknownAreaIds[k], "\n")
@@ -415,6 +441,13 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
   unknownCenter <- calcAreaCentroid(unknown)
   estResults <- merge(unknownCenter, estResults)
 
+  # Calcola i valori minimi e massimi della colonna 'pred'
+  min_value <- min(estResults$pred, na.rm = TRUE)
+  max_value <- max(estResults$pred, na.rm = TRUE)
+  
+  # Stampa i valori minimi e massimi
+  cat("Valore minimo di pred:", min_value, "\n")
+  cat("Valore massimo di pred:", max_value, "\n")
   
   return(estResults)
 }
@@ -653,4 +686,23 @@ atpCoKriging <- function(x, unknownVarId, unknown0, ptVgms, nmax=10, longlat=FAL
                          meanVal=NULL, auxRatioAdj=TRUE, showProgress=FALSE, nopar=FALSE) {
   unknown <- cbind(areaId=1:nrow(unknown0), unknown0, weight=1)
   return(ataCoKriging(x, unknownVarId, unknown, ptVgms, nmax, longlat, oneCondition, meanVal, auxRatioAdj, showProgress, nopar))
+}
+
+# Calcolo del numero di condizionamento usando i valori singolari
+calc_condition_number <- function(C) {
+  svd_C <- svd(C)
+  kappa <- max(svd_C$d) / min(svd_C$d)
+  return(kappa)
+}
+
+# Calcolo del determinante
+calc_determinant <- function(C) {
+  det_C <- det(C)
+  return(det_C)
+}
+
+# Verifica degli autovalori
+calc_eigenvalues <- function(C) {
+  eigen_C <- eigen(C)
+  return(eigen_C$values)
 }

@@ -524,72 +524,90 @@ ataCoKriging.cv <- function(x, unknownVarId, nfold=10, ptVgms, nmax=10, longlat=
 ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE,
                                oneCondition=FALSE, meanVal=NULL, auxRatioAdj=TRUE,
                                showProgress=FALSE, nopar=FALSE, clarkAntiLog=FALSE) {
-
-  if(is(unknown, "discreteArea")) unknown <- unknown$discretePoints
-
+  
+  cat("Inizio funzione ataCoKriging.local\n")
+  
+  if(is(unknown, "discreteArea")) {
+    unknown <- unknown$discretePoints
+    cat("Convertito 'unknown' da 'discreteArea' a 'discretePoints'\n")
+  }
+  
   # sort areaId in ascending order.
   unknown <- unknown[sort.int(unknown[,1], index.return = TRUE)$ix,]
+  cat("Ordinato 'unknown' per 'areaId'\n")
   unknownCenter <- calcAreaCentroid(unknown)
-
+  cat("Calcolato il centroide di 'unknown'\n")
+  
   # neighbor indexes for each unknown point.
   varIds <- sort(names(x))
   nb <- list()
   for (id in varIds) {
+    cat(sprintf("Calcolo dei vicini per la variabile %s\n", id))
     nb[[id]] <- FNN::get.knnx(as.matrix(x[[id]]$areaValues[,2:3,drop=FALSE]), as.matrix(unknownCenter[,2:3,drop=FALSE]), nmax)
     nb[[id]]$nn.index <- matrix(x[[id]]$areaValues[,1][nb[[id]]$nn.index], ncol = nmax)
   }
+  
   # only consider covariables within the radius of unknownVarId
   for (id in varIds[varIds != unknownVarId]) {
+    cat(sprintf("Filtraggio dei vicini per la variabile %s\n", id))
     indx <- nb[[id]]$nn.dist > matrix(rep(nb[[unknownVarId]]$nn.dist[,nmax] * 1.5, nmax), ncol = nmax)
     nb[[id]]$nn.dist[indx] <- NA
     nb[[id]]$nn.index[indx] <- NA
   }
-
+  
   unknownAreaIds <- sort(unique(unknown[,1]))
-
+  cat("Calcolati gli ID delle aree sconosciute\n")
+  
   krigOnce <- function(k) {
+    cat(sprintf("Esecuzione di krigOnce per l'area sconosciuta %d\n", k))
     curUnknown <- unknown[unknown[,1] == unknownAreaIds[k], ]
-
+    
     curx <- list()
     for (id in varIds) {
       if(!hasName(x[[id]], "discretePoints")) {
         x[[id]]$discretePoints <- cbind(x[[id]]$areaValues[,1:3], data.frame(weight=rep(1,nrow(x[[id]]$areaValues))))
         names(x[[id]]$discretePoints)[2:3] <- c("ptx","pty")
+        cat(sprintf("Aggiunti 'discretePoints' per la variabile %s\n", id))
       }
-
+      
       curVals <- x[[id]]$areaValues[x[[id]]$areaValues[,1] %in% nb[[id]]$nn.index[k,],]
       curPts <- x[[id]]$discretePoints[x[[id]]$discretePoints[,1] %in% nb[[id]]$nn.index[k,],]
       if(nrow(curVals) > 0) {
         curx[[id]] <- list(areaValues=curVals, discretePoints=curPts)
+        cat(sprintf("Selezionati valori e punti discreti per la variabile %s\n", id))
       }
     }
-
+    
     estResult <- ataCoKriging(curx, unknownVarId, curUnknown, ptVgms, nmax=Inf, longlat, oneCondition,
                               meanVal, auxRatioAdj, showProgress=FALSE, nopar=TRUE, clarkAntiLog)
+    cat(sprintf("Completata la stima kriging per l'area sconosciuta %d\n", k))
     return(estResult)
   }
-
+  
   hasCluster <- ataIsClusterEnabled()
   if(showProgress) pb <- txtProgressBar(min=0, max=length(unknownAreaIds), width = 50, style = 3)
-
+  
   if(!hasCluster || nopar || length(unknownAreaIds) == 1) {
     estResults <- c()
     for (k in 1:length(unknownAreaIds)) {
+      cat(sprintf("Inizio stima sequenziale per l'area sconosciuta %d\n", k))
       estResults <- rbind(estResults, krigOnce(k))
       if(showProgress) setTxtProgressBar(pb, k)
     }
   } else {
+    cat("Inizio stima parallela\n")
     progress <- function(k) if(showProgress) setTxtProgressBar(pb, k)
     estResults <-
       foreach(k = 1:length(unknownAreaIds), .combine = rbind, .options.snow=list(progress=progress),
-              .export = c("x","ataCoKriging","crossName","ataCov","calcAreaCentroid"),
+              .export = c("x","ataCoKriging","crossName","ataCov","calcAreaCentroid", "spDistsNN"),
               .packages = c("sp","gstat")) %dopar% {
-        krigOnce(k)
+                krigOnce(k)
               }
     ataClusterClearObj()
   }
   if(showProgress) close(pb)
-
+  
+  cat("Fine funzione ataCoKriging.local\n")
   return(estResults)
 }
 

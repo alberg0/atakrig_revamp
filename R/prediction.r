@@ -358,9 +358,17 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     
     # Verifica delle condizioni
     if (kappa > cond_number_threshold) {
-      cat("La matrice è mal condizionata: Numero di condizionamento elevato\n")
-      cat("Numero di condizionamento:", kappa, "\n")
+      # cat("La matrice è mal condizionata: Numero di condizionamento elevato\n")
+      # cat("Numero di condizionamento:", kappa, "\n")
       C <- C + 1e-5 * diag(nrow(C))
+      kappa2 <- calc_condition_number(C)
+      
+      # Verifica delle condizioni
+      if (kappa2 > cond_number_threshold) {
+        # cat("La matrice è ancora mal condizionata: Numero di condizionamento elevato\n")
+        # cat("Numero di condizionamento:", kappa, "\n")
+        # cat("Numero di condizionamento post normalizzazione:", kappa2, "\n")
+      }
     }
   
     if (abs(det_C) < determinant_threshold) {
@@ -383,7 +391,8 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     #   wmu <- MASS::ginv(C) %*% D
     #   solvedByGInv <- TRUE
     # }
-    wmu <- MASS::ginv(C) %*% D
+    # wmu <- MASS::ginv(C) %*% D
+    wmu <- solve_via_svd(C,D)
     
     # estimation
     if(oneCondition) {
@@ -707,4 +716,17 @@ calc_determinant <- function(C) {
 calc_eigenvalues <- function(C) {
   eigen_C <- eigen(C)
   return(eigen_C$values)
+}
+
+# Singolar Value Decomposition
+solve_via_svd <- function(C, D) {
+  svd_C <- svd(C)
+  u <- svd_C$u
+  d <- svd_C$d
+  v <- svd_C$v
+  d_inv <- 1 / d
+  d_inv[d < 1e-10] <- 0  # Imposta a zero i valori singolari molto piccoli per la stabilizzazione
+  C_inv <- v %*% diag(d_inv) %*% t(u)
+  wmu <- C_inv %*% D
+  return(wmu)
 }

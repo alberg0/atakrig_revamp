@@ -391,8 +391,8 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     #   wmu <- MASS::ginv(C) %*% D
     #   solvedByGInv <- TRUE
     # }
-    # wmu <- MASS::ginv(C) %*% D
-    wmu <- solve_via_svd(C,D)
+    wmu <- MASS::ginv(C) %*% D
+    # wmu <- solve_via_svd(C,D)
     
     # estimation
     if(oneCondition) {
@@ -452,8 +452,10 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
   unknownCenter <- calcAreaCentroid(unknown)
   estResults <- merge(unknownCenter, estResults)
 
-  # Stampa i valori minimi e massimi
-  cat("Valore di pred:", estResults$pred, "\n")
+  # Stampa i valori anomali
+  if(abs(estResults$pred) > 1000){
+    cat("Valore di pred:", estResults$pred, "\n")
+  }
   
   return(estResults)
 }
@@ -583,7 +585,6 @@ ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longla
   cat("Calcolati gli ID delle aree sconosciute\n")
   
   krigOnce <- function(k) {
-    cat(sprintf("Esecuzione di krigOnce per l'area sconosciuta %d\n", k))
     curUnknown <- unknown[unknown[,1] == unknownAreaIds[k], ]
     
     curx <- list()
@@ -591,20 +592,17 @@ ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longla
       if(!hasName(x[[id]], "discretePoints")) {
         x[[id]]$discretePoints <- cbind(x[[id]]$areaValues[,1:3], data.frame(weight=rep(1,nrow(x[[id]]$areaValues))))
         names(x[[id]]$discretePoints)[2:3] <- c("ptx","pty")
-        cat(sprintf("Aggiunti 'discretePoints' per la variabile %s\n", id))
       }
       
       curVals <- x[[id]]$areaValues[x[[id]]$areaValues[,1] %in% nb[[id]]$nn.index[k,],]
       curPts <- x[[id]]$discretePoints[x[[id]]$discretePoints[,1] %in% nb[[id]]$nn.index[k,],]
       if(nrow(curVals) > 0) {
         curx[[id]] <- list(areaValues=curVals, discretePoints=curPts)
-        cat(sprintf("Selezionati valori e punti discreti per la variabile %s\n", id))
       }
     }
     
     estResult <- ataCoKriging(curx, unknownVarId, curUnknown, ptVgms, nmax=Inf, longlat, oneCondition,
                               meanVal, auxRatioAdj, showProgress=FALSE, nopar=TRUE, clarkAntiLog)
-    cat(sprintf("Completata la stima kriging per l'area sconosciuta %d\n", k))
     return(estResult)
   }
   
@@ -614,7 +612,6 @@ ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longla
   if(!hasCluster || nopar || length(unknownAreaIds) == 1) {
     estResults <- c()
     for (k in 1:length(unknownAreaIds)) {
-      cat(sprintf("Inizio stima sequenziale per l'area sconosciuta %d\n", k))
       estResults <- rbind(estResults, krigOnce(k))
       if(showProgress) setTxtProgressBar(pb, k)
     }
@@ -713,15 +710,15 @@ calc_eigenvalues <- function(C) {
   return(eigen_C$values)
 }
 
-# Singolar Value Decomposition
-solve_via_svd <- function(C, D) {
-  svd_C <- svd(C)
-  u <- svd_C$u
-  d <- svd_C$d
-  v <- svd_C$v
-  d_inv <- 1 / d
-  d_inv[d < 1e-10] <- 0  # Imposta a zero i valori singolari molto piccoli per la stabilizzazione
-  C_inv <- v %*% diag(d_inv) %*% t(u)
-  wmu <- C_inv %*% D
-  return(wmu)
-}
+# # Singolar Value Decomposition
+# solve_via_svd <- function(C, D) {
+#   svd_C <- svd(C)
+#   u <- svd_C$u
+#   d <- svd_C$d
+#   v <- svd_C$v
+#   d_inv <- 1 / d
+#   d_inv[d < 1e-10] <- 0  # Imposta a zero i valori singolari molto piccoli per la stabilizzazione
+#   C_inv <- v %*% diag(d_inv) %*% t(u)
+#   wmu <- C_inv %*% D
+#   return(wmu)
+# }

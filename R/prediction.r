@@ -360,6 +360,7 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     if (kappa > cond_number_threshold) {
       cat("La matrice è mal condizionata: Numero di condizionamento elevato\n")
       cat("Numero di condizionamento:", kappa, "\n")
+      C <- C + 1e-5 * diag(nrow(C))
     }
   
     if (abs(det_C) < determinant_threshold) {
@@ -371,6 +372,7 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
       cat("La matrice è mal condizionata: Autovalori molto piccoli\n")
       cat("Autovalori della matrice:", eigenvalues, "\n")
     }
+
     
     # solving
     # cat("Solving system for unknown area ID: ", unknownAreaIds[k], "\n")

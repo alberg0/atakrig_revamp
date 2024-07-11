@@ -452,13 +452,8 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
   unknownCenter <- calcAreaCentroid(unknown)
   estResults <- merge(unknownCenter, estResults)
 
-  # Calcola i valori minimi e massimi della colonna 'pred'
-  min_value <- min(estResults$pred, na.rm = TRUE)
-  max_value <- max(estResults$pred, na.rm = TRUE)
-  
   # Stampa i valori minimi e massimi
-  cat("Valore minimo di pred:", min_value, "\n")
-  cat("Valore massimo di pred:", max_value, "\n")
+  cat("Valore di pred:", estResults$pred, "\n")
   
   return(estResults)
 }

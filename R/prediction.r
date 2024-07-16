@@ -254,7 +254,7 @@ ataKriging.local <- function(x, unknown, ptVgm, nmax=10, longlat=FALSE, showProg
 #   showProgress: show progress bar for batch interpolation (multi destination areas).
 #   nopar: disable parallel process in the function even if ataStartCluster() has been called, mainly for  internal use.
 # Output: estimated value of destination area and its variance
-ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE, oneCondition=FALSE,
+ataCoKriging_backup <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE, oneCondition=FALSE,
                          meanVal=NULL, auxRatioAdj=TRUE, showProgress=FALSE, nopar=FALSE, clarkAntiLog=FALSE) {
   
     
@@ -547,7 +547,7 @@ ataCoKriging.cv <- function(x, unknownVarId, nfold=10, ptVgms, nmax=10, longlat=
 
 
 ## ataCoKriging.local: [internal use only]. ----
-ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE,
+ataCoKriging.local_backup <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE,
                                oneCondition=FALSE, meanVal=NULL, auxRatioAdj=TRUE,
                                showProgress=FALSE, nopar=FALSE, clarkAntiLog=FALSE) {
 
@@ -709,7 +709,7 @@ calc_eigenvalues <- function(C) {
   return(eigen_C$values)
 }
 
-ataCoKriging.local_with_CD <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE,
+ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE,
                                oneCondition=FALSE, meanVal=NULL, auxRatioAdj=TRUE,
                                showProgress=FALSE, nopar=FALSE, clarkAntiLog=FALSE) {
   
@@ -763,7 +763,7 @@ ataCoKriging.local_with_CD <- function(x, unknownVarId, unknown, ptVgms, nmax=10
       }
     }
     
-    result <- ataCoKriging_with_CD(curx, unknownVarId, curUnknown, ptVgms, nmax=Inf, longlat, oneCondition,
+    result <- ataCoKriging(curx, unknownVarId, curUnknown, ptVgms, nmax=Inf, longlat, oneCondition,
                                    meanVal, auxRatioAdj, showProgress=FALSE, nopar=TRUE, clarkAntiLog)
     estResult <- result$estimates
     C <- result$C
@@ -791,7 +791,7 @@ ataCoKriging.local_with_CD <- function(x, unknownVarId, unknown, ptVgms, nmax=10
     progress <- function(k) if(showProgress) setTxtProgressBar(pb, k)
     results <-
       foreach(k = 1:length(unknownAreaIds), .combine = 'c', .options.snow=list(progress=progress),
-              .export = c("x","ataCoKriging_with_CD","crossName","ataCov","calcAreaCentroid", "spDistsNN"),
+              .export = c("x","ataCoKriging","crossName","ataCov","calcAreaCentroid", "spDistsNN"),
               .packages = c("sp","gstat")) %dopar% {
                 krigOnce(k)
               }
@@ -810,14 +810,14 @@ ataCoKriging.local_with_CD <- function(x, unknownVarId, unknown, ptVgms, nmax=10
   return(estResults)
 }
 
-ataCoKriging_with_CD <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE, oneCondition=FALSE,
+ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE, oneCondition=FALSE,
                                  meanVal=NULL, auxRatioAdj=TRUE, showProgress=FALSE, nopar=FALSE, clarkAntiLog=FALSE) {
 
   stopifnot(nmax > 0)
 
   if(nmax < Inf) {
     cat("usign ataCoKriging local\n")
-    return(ataCoKriging.local_with_CD(x, unknownVarId, unknown, ptVgms, nmax, longlat, oneCondition,
+    return(ataCoKriging.local(x, unknownVarId, unknown, ptVgms, nmax, longlat, oneCondition,
                                       meanVal, auxRatioAdj, showProgress, nopar, clarkAntiLog))
   }
 

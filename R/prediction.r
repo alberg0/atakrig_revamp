@@ -550,8 +550,7 @@ ataCoKriging.cv <- function(x, unknownVarId, nfold=10, ptVgms, nmax=10, longlat=
 ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE,
                                oneCondition=FALSE, meanVal=NULL, auxRatioAdj=TRUE,
                                showProgress=FALSE, nopar=FALSE, clarkAntiLog=FALSE) {
-  
-  cat("Inizio funzione ataCoKriging.local\n")
+
   
   if(is(unknown, "discreteArea")) {
     unknown <- unknown$discretePoints
@@ -710,15 +709,257 @@ calc_eigenvalues <- function(C) {
   return(eigen_C$values)
 }
 
-# # Singolar Value Decomposition
-# solve_via_svd <- function(C, D) {
-#   svd_C <- svd(C)
-#   u <- svd_C$u
-#   d <- svd_C$d
-#   v <- svd_C$v
-#   d_inv <- 1 / d
-#   d_inv[d < 1e-10] <- 0  # Imposta a zero i valori singolari molto piccoli per la stabilizzazione
-#   C_inv <- v %*% diag(d_inv) %*% t(u)
-#   wmu <- C_inv %*% D
-#   return(wmu)
-# }
+ataCoKriging.local_with_CD <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE,
+                               oneCondition=FALSE, meanVal=NULL, auxRatioAdj=TRUE,
+                               showProgress=FALSE, nopar=FALSE, clarkAntiLog=FALSE) {
+  
+  cat("Inizio funzione ataCoKriging.local\n")
+  
+  if(is(unknown, "discreteArea")) {
+    unknown <- unknown$discretePoints
+    cat("Convertito 'unknown' da 'discreteArea' a 'discretePoints'\n")
+  }
+  
+  # sort areaId in ascending order.
+  unknown <- unknown[sort.int(unknown[,1], index.return = TRUE)$ix,]
+  cat("Ordinato 'unknown' per 'areaId'\n")
+  unknownCenter <- calcAreaCentroid(unknown)
+  cat("Calcolato il centroide di 'unknown'\n")
+  
+  # neighbor indexes for each unknown point.
+  varIds <- sort(names(x))
+  nb <- list()
+  for (id in varIds) {
+    cat(sprintf("Calcolo dei vicini per la variabile %s\n", id))
+    nb[[id]] <- FNN::get.knnx(as.matrix(x[[id]]$areaValues[,2:3,drop=FALSE]), as.matrix(unknownCenter[,2:3,drop=FALSE]), nmax)
+    nb[[id]]$nn.index <- matrix(x[[id]]$areaValues[,1][nb[[id]]$nn.index], ncol = nmax)
+  }
+  
+  # only consider covariables within the radius of unknownVarId
+  for (id in varIds[varIds != unknownVarId]) {
+    cat(sprintf("Filtraggio dei vicini per la variabile %s\n", id))
+    indx <- nb[[id]]$nn.dist > matrix(rep(nb[[unknownVarId]]$nn.dist[,nmax] * 1.5, nmax), ncol = nmax)
+    nb[[id]]$nn.dist[indx] <- NA
+    nb[[id]]$nn.index[indx] <- NA
+  }
+  
+  unknownAreaIds <- sort(unique(unknown[,1]))
+  cat("Calcolati gli ID delle aree sconosciute\n")
+  
+  krigOnce <- function(k) {
+    curUnknown <- unknown[unknown[,1] == unknownAreaIds[k], ]
+    
+    curx <- list()
+    for (id in varIds) {
+      if(!hasName(x[[id]], "discretePoints")) {
+        x[[id]]$discretePoints <- cbind(x[[id]]$areaValues[,1:3], data.frame(weight=rep(1,nrow(x[[id]]$areaValues))))
+        names(x[[id]]$discretePoints)[2:3] <- c("ptx","pty")
+      }
+      
+      curVals <- x[[id]]$areaValues[x[[id]]$areaValues[,1] %in% nb[[id]]$nn.index[k,],]
+      curPts <- x[[id]]$discretePoints[x[[id]]$discretePoints[,1] %in% nb[[id]]$nn.index[k,],]
+      if(nrow(curVals) > 0) {
+        curx[[id]] <- list(areaValues=curVals, discretePoints=curPts)
+      }
+    }
+    
+    result <- ataCoKriging_with_CD(curx, unknownVarId, curUnknown, ptVgms, nmax=Inf, longlat, oneCondition,
+                                   meanVal, auxRatioAdj, showProgress=FALSE, nopar=TRUE, clarkAntiLog)
+    estResult <- result$estimates
+    C <- result$C
+    D <- result$D
+    
+    return(list(estimates = estResult, C = C, D = D))
+  }
+  
+  hasCluster <- ataIsClusterEnabled()
+  if(showProgress) pb <- txtProgressBar(min=0, max=length(unknownAreaIds), width = 50, style = 3)
+  
+  estResults <- list()
+  if(!hasCluster || nopar || length(unknownAreaIds) == 1) {
+    for (k in 1:length(unknownAreaIds)) {
+      res <- krigOnce(k)
+      estResults$estimates <- rbind(estResults$estimates, res$estimates)
+      if (k == 1) {
+        estResults$C <- res$C
+        estResults$D <- res$D
+      }
+      if(showProgress) setTxtProgressBar(pb, k)
+    }
+  } else {
+    cat("Inizio stima parallela\n")
+    progress <- function(k) if(showProgress) setTxtProgressBar(pb, k)
+    results <-
+      foreach(k = 1:length(unknownAreaIds), .combine = 'c', .options.snow=list(progress=progress),
+              .export = c("x","ataCoKriging_with_CD","crossName","ataCov","calcAreaCentroid", "spDistsNN"),
+              .packages = c("sp","gstat")) %dopar% {
+                krigOnce(k)
+              }
+    for (res in results) {
+      estResults$estimates <- rbind(estResults$estimates, res$estimates)
+      if (is.null(estResults$C) && is.null(estResults$D)) {
+        estResults$C <- res$C
+        estResults$D <- res$D
+      }
+    }
+    ataClusterClearObj()
+  }
+  if(showProgress) close(pb)
+  
+  cat("Fine funzione ataCoKriging.local\n")
+  return(estResults)
+}
+
+ataCoKriging_with_CD <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE, oneCondition=FALSE,
+                                 meanVal=NULL, auxRatioAdj=TRUE, showProgress=FALSE, nopar=FALSE, clarkAntiLog=FALSE) {
+
+  stopifnot(nmax > 0)
+
+  if(nmax < Inf) {
+    cat("usign ataCoKriging local\n")
+    return(ataCoKriging.local_with_CD(x, unknownVarId, unknown, ptVgms, nmax, longlat, oneCondition,
+                                      meanVal, auxRatioAdj, showProgress, nopar, clarkAntiLog))
+  }
+
+  if(is(unknown, "discreteArea")) unknown <- unknown$discretePoints
+  if(is(ptVgms, "ataKrigVgm")) ptVgms <- extractPointVgm(ptVgms)
+
+  # sort areaId in ascending order.
+  for (i in 1:length(x)) {
+    x[[i]]$areaValues <- x[[i]]$areaValues[sort.int(x[[i]]$areaValues[,1], index.return = TRUE)$ix,]
+  }
+
+  # combine all data together.
+  varIds <- sort(names(x))
+  xAll <- list(areaValues=NULL, discretePoints=NULL)
+  for (id in varIds) {
+    if(!hasName(x[[id]], "discretePoints")) {
+      x[[id]]$discretePoints <- cbind(x[[id]]$areaValues[,1:3], data.frame(weight=rep(1,nrow(x[[id]]$areaValues))))
+      names(x[[id]]$discretePoints)[2:3] <- c("ptx","pty")
+    }
+
+    x[[id]]$areaValues$varId <- id
+    x[[id]]$areaValues$var_areaId <- paste(id, x[[id]]$areaValues[,1], sep = "_")
+    x[[id]]$discretePoints$varId <- id
+    x[[id]]$discretePoints$var_areaId <- paste(id, x[[id]]$discretePoints[,1], sep = "_")
+
+    xAll$areaValues <- rbind(xAll$areaValues, x[[id]]$areaValues)
+    xAll$discretePoints <- rbind(xAll$discretePoints, x[[id]]$discretePoints)
+  }
+
+  sampleIds <- sort(unique(xAll$discretePoints$var_areaId))
+  nSamples <- length(sampleIds)		# number of all samples
+  nVars <- length(x) # number of variables
+
+  ## Kriging system: C * wmu = D
+  if(oneCondition) {
+    C <- matrix(0, nrow=nSamples+1, ncol=nSamples+1)
+    D <- matrix(0, nrow=nSamples+1, ncol=1)
+  } else {
+    C <- matrix(0, nrow=nSamples+nVars, ncol=nSamples+nVars)
+    D <- matrix(0, nrow=nSamples+nVars, ncol=1)
+  }
+
+  # C matrix
+  sampleIndex <- list()
+  for(i in 1:nSamples) {
+    if(length(sampleIndex) < i) sampleIndex[[i]] <- xAll$discretePoints$var_areaId == sampleIds[i]
+    sampleI <- xAll$discretePoints[sampleIndex[[i]],]
+    for(j in i:nSamples) {
+      if(length(sampleIndex) < j) sampleIndex[[j]] <- xAll$discretePoints$var_areaId == sampleIds[j]
+      sampleJ <- xAll$discretePoints[sampleIndex[[j]],]
+      ptVgm <- ptVgms[[crossName(sampleI$varId[1], sampleJ$varId[1])]]
+      C[i,j] <- ataCov(sampleI[,2:4], sampleJ[,2:4], ptVgm, longlat = longlat)
+      C[j,i] <- C[i,j]
+    }
+  }
+
+  if(oneCondition) {
+    C[nSamples+1, ] <- 1
+    C[, nSamples+1] <- 1
+    C[nSamples+1, nSamples+1] <- 0
+    D[nSamples+1] <- 1
+  } else {
+    for (i in 1:nVars) {
+      indx <- xAll$areaValues$varId == varIds[i]
+      C[nSamples+i, (1:nSamples)[indx]] <- 1
+      C[(1:nSamples)[indx], nSamples+i] <- 1
+    }
+    D[nSamples + which(unknownVarId == varIds)] <- 1
+  }
+
+  unknownAreaIds <- sort(unique(unknown[,1]))
+
+  krigOnce <- function(k) {
+    curUnknown <- unknown[unknown[,1] == unknownAreaIds[k], 2:4]
+
+    # D matrix
+    for(i in 1:nSamples) {
+      sampleI <- xAll$discretePoints[xAll$discretePoints$var_areaId == sampleIds[i],]
+      ptVgm <- ptVgms[[crossName(sampleI$varId[1], unknownVarId)]]
+      D[i] <- ataCov(sampleI[,2:4], curUnknown, ptVgm, longlat = longlat)
+    }
+
+    # solving
+    wmu <- MASS::ginv(C) %*% D
+
+    # estimation
+    if(oneCondition) {
+      if(is.null(meanVal)) {
+        for (id in varIds) {
+          meanVal <- rbind(meanVal, data.frame(varId=id, value=mean(x[[id]]$areaValues[,4])))
+        }
+      }
+      rownames(meanVal) <- meanVal$varId
+
+      w <- wmu[1:nSamples]
+      w1 <- w[unknownVarId == xAll$areaValues$varId]
+      yest <- sum(w1 * x[[unknownVarId]]$areaValues[,4])
+      for (id in varIds[varIds != unknownVarId]) {
+        w2 <- w[id == xAll$areaValues$varId]
+        if (auxRatioAdj && abs(meanVal[id,2]) > 1e-6) {
+          yest <- yest + sum(w2 * ((x[[id]]$areaValues[,4] - meanVal[id, 2])*(meanVal[unknownVarId, 2]/meanVal[id,2]) + meanVal[unknownVarId, 2]))
+        } else {
+          yest <- yest + sum(w2 * (x[[id]]$areaValues[,4] - meanVal[id, 2] + meanVal[unknownVarId, 2]))
+        }
+      }
+    } else {
+      w <- wmu[1:nSamples][unknownVarId == xAll$areaValues$varId]
+      yest <- sum(w * x[[unknownVarId]]$areaValues[,4])
+    }
+    yvar <- ataCov(curUnknown, curUnknown, ptVgms[[unknownVarId]], longlat = longlat) - sum(wmu * D)
+
+    if(!clarkAntiLog)
+      return(data.frame(areaId=unknownAreaIds[k], pred=yest, var=yvar))
+    else
+      return(data.frame(areaId=unknownAreaIds[k], pred=yest, var=yvar,
+                        pred.Clark=yest + sum(wmu * D)))
+  }
+
+  hasCluster <- ataIsClusterEnabled()
+  if(showProgress) pb <- txtProgressBar(min=0, max=length(unknownAreaIds), width = 50, style = 3)
+
+  if(!hasCluster || nopar || length(unknownAreaIds) == 1) {
+    estResults <- c()
+    for (k in 1:length(unknownAreaIds)) {
+      estResults <- rbind(estResults, krigOnce(k))
+      if(showProgress) setTxtProgressBar(pb, k)
+    }
+  } else {
+    progress <- function(k) if(showProgress) setTxtProgressBar(pb, k)
+    estResults <-
+      foreach(k = 1:length(unknownAreaIds), .combine = rbind, .options.snow=list(progress=progress),
+              .export = c("D","meanVal","crossName","ataCov","calcAreaCentroid", "spDistsNN"),
+              .packages = c("sp","gstat")) %dopar% {
+                krigOnce(k)
+              }
+    ataClusterClearObj()
+  }
+
+  if(showProgress) close(pb)
+
+  unknownCenter <- calcAreaCentroid(unknown)
+  estResults <- merge(unknownCenter, estResults)
+
+  return(list(estimates = estResults, C = C, D = D))
+}

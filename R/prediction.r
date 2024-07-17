@@ -749,6 +749,11 @@ ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longla
   krigOnce <- function(k) {
     curUnknown <- unknown[unknown[,1] == unknownAreaIds[k], ]
     
+    if (nrow(curUnknown) == 0) {
+      # Se non ci sono dati per questa area, restituisci NA per estimates, C e D
+      return(list(estimates = NA, C = NA, D = NA))
+    }
+
     curx <- list()
     for (id in varIds) {
       if(!hasName(x[[id]], "discretePoints")) {
@@ -761,6 +766,11 @@ ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longla
       if(nrow(curVals) > 0) {
         curx[[id]] <- list(areaValues=curVals, discretePoints=curPts)
       }
+    }
+
+    if (length(curx) == 0) {
+      # Se non ci sono valori per le variabili, restituisci NA per estimates, C e D
+      return(list(estimates = NA, C = NA, D = NA))
     }
     
     result <- ataCoKriging(curx, unknownVarId, curUnknown, ptVgms, nmax=Inf, longlat, oneCondition,
@@ -779,10 +789,12 @@ ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longla
   if(!hasCluster || nopar || length(unknownAreaIds) == 1) {
     for (k in 1:length(unknownAreaIds)) {
       res <- krigOnce(k)
-      estResults$estimates <- rbind(estResults$estimates, res$estimates)
-      if (k == 1) {
-        estResults$C <- res$C
-        estResults$D <- res$D
+      if (!is.null(res$estimates)) {
+        estResults$estimates <- rbind(estResults$estimates, res$estimates)
+        if (k == 1) {
+          estResults$C <- res$C
+          estResults$D <- res$D
+        }
       }
       if(showProgress) setTxtProgressBar(pb, k)
     }
@@ -796,10 +808,12 @@ ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longla
                 krigOnce(k)
               }
     for (res in results) {
-      estResults$estimates <- rbind(estResults$estimates, res$estimates)
-      if (is.null(estResults$C) && is.null(estResults$D)) {
-        estResults$C <- res$C
-        estResults$D <- res$D
+      if (!is.null(res$estimates)) {
+        estResults$estimates <- rbind(estResults$estimates, res$estimates)
+        if (is.null(estResults$C) && is.null(estResults$D)) {
+          estResults$C <- res$C
+          estResults$D <- res$D
+        }
       }
     }
     ataClusterClearObj()
@@ -809,6 +823,7 @@ ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longla
   cat("Fine funzione ataCoKriging.local\n")
   return(estResults)
 }
+
 
 ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE, oneCondition=FALSE,
                                  meanVal=NULL, auxRatioAdj=TRUE, showProgress=FALSE, nopar=FALSE, clarkAntiLog=FALSE) {

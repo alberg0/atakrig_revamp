@@ -715,100 +715,104 @@ ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longla
   
   cat("Inizio funzione ataCoKriging.local\n")
   
-  if(is(unknown, "discreteArea")) {
+  if (is(unknown, "discreteArea")) {
     unknown <- unknown$discretePoints
     cat("Convertito 'unknown' da 'discreteArea' a 'discretePoints'\n")
   }
   
-  # sort areaId in ascending order.
-  unknown <- unknown[sort.int(unknown[,1], index.return = TRUE)$ix,]
+  # Sort areaId in ascending order.
+  unknown <- unknown[sort.int(unknown[, 1], index.return = TRUE)$ix, ]
   cat("Ordinato 'unknown' per 'areaId'\n")
   unknownCenter <- calcAreaCentroid(unknown)
   cat("Calcolato il centroide di 'unknown'\n")
   
-  # neighbor indexes for each unknown point.
+  # Neighbor indexes for each unknown point.
   varIds <- sort(names(x))
   nb <- list()
   for (id in varIds) {
     cat(sprintf("Calcolo dei vicini per la variabile %s\n", id))
-    nb[[id]] <- FNN::get.knnx(as.matrix(x[[id]]$areaValues[,2:3,drop=FALSE]), as.matrix(unknownCenter[,2:3,drop=FALSE]), nmax)
-    nb[[id]]$nn.index <- matrix(x[[id]]$areaValues[,1][nb[[id]]$nn.index], ncol = nmax)
+    nb[[id]] <- FNN::get.knnx(as.matrix(x[[id]]$areaValues[, 2:3, drop = FALSE]), as.matrix(unknownCenter[, 2:3, drop = FALSE]), nmax)
+    nb[[id]]$nn.index <- matrix(x[[id]]$areaValues[, 1][nb[[id]]$nn.index], ncol = nmax)
   }
   
-  # only consider covariables within the radius of unknownVarId
+  # Only consider covariables within the radius of unknownVarId
   for (id in varIds[varIds != unknownVarId]) {
     cat(sprintf("Filtraggio dei vicini per la variabile %s\n", id))
-    indx <- nb[[id]]$nn.dist > matrix(rep(nb[[unknownVarId]]$nn.dist[,nmax] * 1.5, nmax), ncol = nmax)
+    indx <- nb[[id]]$nn.dist > matrix(rep(nb[[unknownVarId]]$nn.dist[, nmax] * 1.5, nmax), ncol = nmax)
     nb[[id]]$nn.dist[indx] <- NA
     nb[[id]]$nn.index[indx] <- NA
   }
   
-  unknownAreaIds <- sort(unique(unknown[,1]))
+  unknownAreaIds <- sort(unique(unknown[, 1]))
   cat("Calcolati gli ID delle aree sconosciute\n")
   
   krigOnce <- function(k) {
-    curUnknown <- unknown[unknown[,1] == unknownAreaIds[k], ]
+    cat(sprintf("Inizio krigOnce per areaId %d\n", unknownAreaIds[k]))
+    curUnknown <- unknown[unknown[, 1] == unknownAreaIds[k], ]
     
     if (nrow(curUnknown) == 0) {
-      # Se non ci sono dati per questa area, restituisci NA per estimates, C e D
+      cat("Nessun dato per questa area. Restituzione NA\n")
       return(list(estimates = NA, C = NA, D = NA))
     }
 
     curx <- list()
     for (id in varIds) {
-      if(!hasName(x[[id]], "discretePoints")) {
-        x[[id]]$discretePoints <- cbind(x[[id]]$areaValues[,1:3], data.frame(weight=rep(1,nrow(x[[id]]$areaValues))))
-        names(x[[id]]$discretePoints)[2:3] <- c("ptx","pty")
+      if (!hasName(x[[id]], "discretePoints")) {
+        x[[id]]$discretePoints <- cbind(x[[id]]$areaValues[, 1:3], data.frame(weight = rep(1, nrow(x[[id]]$areaValues))))
+        names(x[[id]]$discretePoints)[2:3] <- c("ptx", "pty")
       }
       
-      curVals <- x[[id]]$areaValues[x[[id]]$areaValues[,1] %in% nb[[id]]$nn.index[k,],]
-      curPts <- x[[id]]$discretePoints[x[[id]]$discretePoints[,1] %in% nb[[id]]$nn.index[k,],]
-      if(nrow(curVals) > 0) {
-        curx[[id]] <- list(areaValues=curVals, discretePoints=curPts)
+      curVals <- x[[id]]$areaValues[x[[id]]$areaValues[, 1] %in% nb[[id]]$nn.index[k, ], ]
+      curPts <- x[[id]]$discretePoints[x[[id]]$discretePoints[, 1] %in% nb[[id]]$nn.index[k, ], ]
+      if (nrow(curVals) > 0) {
+        curx[[id]] <- list(areaValues = curVals, discretePoints = curPts)
       }
     }
 
     if (length(curx) == 0) {
-      # Se non ci sono valori per le variabili, restituisci NA per estimates, C e D
+      cat("Nessun valore per le variabili. Restituzione NA\n")
       return(list(estimates = NA, C = NA, D = NA))
     }
     
-    result <- ataCoKriging(curx, unknownVarId, curUnknown, ptVgms, nmax=Inf, longlat, oneCondition,
-                                   meanVal, auxRatioAdj, showProgress=FALSE, nopar=TRUE, clarkAntiLog)
+    result <- ataCoKriging(curx, unknownVarId, curUnknown, ptVgms, nmax = Inf, longlat, oneCondition,
+                           meanVal, auxRatioAdj, showProgress = FALSE, nopar = TRUE, clarkAntiLog)
     estResult <- result$estimates
     C <- result$C
     D <- result$D
+    cat("Fine krigOnce\n")
     
     return(list(estimates = estResult, C = C, D = D))
   }
   
   hasCluster <- ataIsClusterEnabled()
-  if(showProgress) pb <- txtProgressBar(min=0, max=length(unknownAreaIds), width = 50, style = 3)
+  if (showProgress) pb <- txtProgressBar(min = 0, max = length(unknownAreaIds), width = 50, style = 3)
+  cat("Verificata presenza di cluster\n")
   
-  estResults <- list()
-  if(!hasCluster || nopar || length(unknownAreaIds) == 1) {
+  estResults <- list(estimates = NULL, C = NULL, D = NULL)
+  if (!hasCluster || nopar || length(unknownAreaIds) == 1) {
     for (k in 1:length(unknownAreaIds)) {
+      cat(sprintf("Inizio kriging per areaId %d\n", unknownAreaIds[k]))
       res <- krigOnce(k)
-      if (!is.null(res$estimates)) {
+      if (!is.null(res$estimates) && !is.na(res$estimates)) {
         estResults$estimates <- rbind(estResults$estimates, res$estimates)
-        if (k == 1) {
+        if (is.null(estResults$C) && is.null(estResults$D)) {
           estResults$C <- res$C
           estResults$D <- res$D
         }
       }
-      if(showProgress) setTxtProgressBar(pb, k)
+      if (showProgress) setTxtProgressBar(pb, k)
     }
   } else {
     cat("Inizio stima parallela\n")
-    progress <- function(k) if(showProgress) setTxtProgressBar(pb, k)
+    progress <- function(k) if (showProgress) setTxtProgressBar(pb, k)
     results <-
-      foreach(k = 1:length(unknownAreaIds), .combine = 'c', .options.snow=list(progress=progress),
-              .export = c("x","ataCoKriging","crossName","ataCov","calcAreaCentroid", "spDistsNN"),
-              .packages = c("sp","gstat")) %dopar% {
+      foreach(k = 1:length(unknownAreaIds), .combine = list, .multicombine = TRUE, .options.snow = list(progress = progress),
+              .export = c("x", "ataCoKriging", "crossName", "ataCov", "calcAreaCentroid", "spDistsNN"),
+              .packages = c("sp", "gstat")) %dopar% {
                 krigOnce(k)
               }
     for (res in results) {
-      if (!is.null(res$estimates)) {
+      if (!is.null(res$estimates) && !is.na(res$estimates)) {
         estResults$estimates <- rbind(estResults$estimates, res$estimates)
         if (is.null(estResults$C) && is.null(estResults$D)) {
           estResults$C <- res$C
@@ -818,40 +822,32 @@ ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longla
     }
     ataClusterClearObj()
   }
-  if(showProgress) close(pb)
+  if (showProgress) close(pb)
   
   cat("Fine funzione ataCoKriging.local\n")
   return(estResults)
 }
 
 
+
 ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE, oneCondition=FALSE,
-                         meanVal=NULL, auxRatioAdj=TRUE, showProgress=FALSE, nopar=FALSE, clarkAntiLog=FALSE) {
+                                 meanVal=NULL, auxRatioAdj=TRUE, showProgress=FALSE, nopar=FALSE, clarkAntiLog=FALSE) {
 
   stopifnot(nmax > 0)
 
-  cat("Inizio funzione ataCoKriging\n")
-
   if(nmax < Inf) {
-    cat("Utilizzo ataCoKriging.local\n")
+    cat("usign ataCoKriging local\n")
     return(ataCoKriging.local(x, unknownVarId, unknown, ptVgms, nmax, longlat, oneCondition,
-                              meanVal, auxRatioAdj, showProgress, nopar, clarkAntiLog))
+                                      meanVal, auxRatioAdj, showProgress, nopar, clarkAntiLog))
   }
 
-  if(is(unknown, "discreteArea")) {
-    unknown <- unknown$discretePoints
-    cat("Convertito 'unknown' da 'discreteArea' a 'discretePoints'\n")
-  }
-  if(is(ptVgms, "ataKrigVgm")) {
-    ptVgms <- extractPointVgm(ptVgms)
-    cat("Estratto point variogram\n")
-  }
+  if(is(unknown, "discreteArea")) unknown <- unknown$discretePoints
+  if(is(ptVgms, "ataKrigVgm")) ptVgms <- extractPointVgm(ptVgms)
 
   # sort areaId in ascending order.
   for (i in 1:length(x)) {
     x[[i]]$areaValues <- x[[i]]$areaValues[sort.int(x[[i]]$areaValues[,1], index.return = TRUE)$ix,]
   }
-  cat("Ordinato 'areaValues' per ogni variabile in 'x'\n")
 
   # combine all data together.
   varIds <- sort(names(x))
@@ -870,10 +866,9 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     xAll$areaValues <- rbind(xAll$areaValues, x[[id]]$areaValues)
     xAll$discretePoints <- rbind(xAll$discretePoints, x[[id]]$discretePoints)
   }
-  cat("Combinati tutti i dati in 'xAll'\n")
 
   sampleIds <- sort(unique(xAll$discretePoints$var_areaId))
-  nSamples <- length(sampleIds)  # number of all samples
+  nSamples <- length(sampleIds)		# number of all samples
   nVars <- length(x) # number of variables
 
   ## Kriging system: C * wmu = D
@@ -884,7 +879,6 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     C <- matrix(0, nrow=nSamples+nVars, ncol=nSamples+nVars)
     D <- matrix(0, nrow=nSamples+nVars, ncol=1)
   }
-  cat("Inizializzato sistema di kriging (C e D)\n")
 
   # C matrix
   sampleIndex <- list()
@@ -899,14 +893,12 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
       C[j,i] <- C[i,j]
     }
   }
-  cat("Costruita matrice C\n")
 
   if(oneCondition) {
     C[nSamples+1, ] <- 1
     C[, nSamples+1] <- 1
     C[nSamples+1, nSamples+1] <- 0
     D[nSamples+1] <- 1
-    cat("Applicata condizione singola a C e D\n")
   } else {
     for (i in 1:nVars) {
       indx <- xAll$areaValues$varId == varIds[i]
@@ -914,15 +906,12 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
       C[(1:nSamples)[indx], nSamples+i] <- 1
     }
     D[nSamples + which(unknownVarId == varIds)] <- 1
-    cat("Applicate condizioni multiple a C e D\n")
   }
 
   unknownAreaIds <- sort(unique(unknown[,1]))
-  cat("Calcolati gli ID delle aree sconosciute\n")
 
   krigOnce <- function(k) {
     curUnknown <- unknown[unknown[,1] == unknownAreaIds[k], 2:4]
-    cat(sprintf("Inizio krigOnce per areaId %d\n", unknownAreaIds[k]))
 
     # D matrix
     for(i in 1:nSamples) {
@@ -930,11 +919,9 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
       ptVgm <- ptVgms[[crossName(sampleI$varId[1], unknownVarId)]]
       D[i] <- ataCov(sampleI[,2:4], curUnknown, ptVgm, longlat = longlat)
     }
-    cat("Calcolata matrice D\n")
 
     # solving
     wmu <- MASS::ginv(C) %*% D
-    cat("Risolto sistema lineare\n")
 
     # estimation
     if(oneCondition) {
@@ -961,7 +948,6 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
       yest <- sum(w * x[[unknownVarId]]$areaValues[,4])
     }
     yvar <- ataCov(curUnknown, curUnknown, ptVgms[[unknownVarId]], longlat = longlat) - sum(wmu * D)
-    cat("Calcolata stima e varianza\n")
 
     if(!clarkAntiLog)
       return(data.frame(areaId=unknownAreaIds[k], pred=yest, var=yvar))
@@ -972,12 +958,10 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
 
   hasCluster <- ataIsClusterEnabled()
   if(showProgress) pb <- txtProgressBar(min=0, max=length(unknownAreaIds), width = 50, style = 3)
-  cat("Verificata presenza di cluster\n")
 
   if(!hasCluster || nopar || length(unknownAreaIds) == 1) {
     estResults <- c()
     for (k in 1:length(unknownAreaIds)) {
-      cat(sprintf("Inizio kriging per areaId %d\n", unknownAreaIds[k]))
       estResults <- rbind(estResults, krigOnce(k))
       if(showProgress) setTxtProgressBar(pb, k)
     }
@@ -991,14 +975,11 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
               }
     ataClusterClearObj()
   }
-  cat("Completato kriging\n")
 
   if(showProgress) close(pb)
 
   unknownCenter <- calcAreaCentroid(unknown)
   estResults <- merge(unknownCenter, estResults)
-  cat("Calcolato centroide e uniti i risultati\n")
 
-  cat("Fine funzione ataCoKriging\n")
   return(list(estimates = estResults, C = C, D = D))
 }

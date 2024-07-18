@@ -793,7 +793,7 @@ ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longla
     for (k in 1:length(unknownAreaIds)) {
       cat(sprintf("Inizio kriging per areaId %d\n", unknownAreaIds[k]))
       res <- krigOnce(k)
-      if (!is.null(res$estimates) && !is.na(res$estimates)) {
+      if (!is.null(res$estimates) && all(!is.na(res$estimates))) {
         estResults$estimates <- rbind(estResults$estimates, res$estimates)
         if (is.null(estResults$C) && is.null(estResults$D)) {
           estResults$C <- res$C
@@ -816,7 +816,7 @@ ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longla
                 krigOnce(k)
               }
     for (res in results) {
-      if (!is.null(res$estimates) && !is.na(res$estimates)) {
+      if (!is.null(res$estimates) && all(!is.na(res$estimates))) {
         estResults$estimates <- rbind(estResults$estimates, res$estimates)
         if (is.null(estResults$C) && is.null(estResults$D)) {
           estResults$C <- res$C

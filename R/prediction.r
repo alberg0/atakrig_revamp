@@ -788,7 +788,7 @@ ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longla
   if (showProgress) pb <- txtProgressBar(min = 0, max = length(unknownAreaIds), width = 50, style = 3)
   cat("Verificata presenza di cluster\n")
   
-  estResults <- list(estimates = NULL, C = NULL, D = NULL)
+  estResults <- list(estimates = NULL, C = NULL, D = NULL, highEstimateAreas = list())
   if (!hasCluster || nopar || length(unknownAreaIds) == 1) {
     for (k in 1:length(unknownAreaIds)) {
       cat(sprintf("Inizio kriging per areaId %d\n", unknownAreaIds[k]))
@@ -798,6 +798,10 @@ ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longla
         if (is.null(estResults$C) && is.null(estResults$D)) {
           estResults$C <- res$C
           estResults$D <- res$D
+        }
+        if (any(res$estimates$pred > 100000)) {
+          cat(sprintf("Aggiunta areaId %d alla lista highEstimateAreas\n", unknownAreaIds[k]))
+          estResults$highEstimateAreas[[as.character(unknownAreaIds[k])]] <- list(C = res$C, D = res$D)
         }
       }
       if (showProgress) setTxtProgressBar(pb, k)
@@ -817,6 +821,10 @@ ataCoKriging.local <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longla
         if (is.null(estResults$C) && is.null(estResults$D)) {
           estResults$C <- res$C
           estResults$D <- res$D
+        }
+        if (any(res$estimates$pred > 100000)) {
+          cat(sprintf("Aggiunta areaId %s alla lista highEstimateAreas\n", names(res$estimates)))
+          estResults$highEstimateAreas[[as.character(names(res$estimates))]] <- list(C = res$C, D = res$D)
         }
       }
     }

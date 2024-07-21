@@ -31,5 +31,6 @@ export(
   ataSetNumberOfThreadsForOMP,
   ataStartCluster,
   ataStopCluster,
-  ataIsClusterEnabled
+  ataIsClusterEnabled,
+  ataCov 
 )

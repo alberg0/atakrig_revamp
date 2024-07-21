@@ -332,6 +332,42 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     }
     D[nSamples + which(unknownVarId == varIds)] <- 1
   }
+
+
+  # Soglie di mal condizionamento
+  cond_number_threshold <- 1e4
+  determinant_threshold <- 1e-10
+  eigenvalue_threshold <- 1e-10
+
+  # Calcoli
+  kappa <- calc_condition_number(C)
+  det_C <- calc_determinant(C)
+  eigenvalues <- calc_eigenvalues(C)
+  
+  # Verifica delle condizioni
+  if (kappa > cond_number_threshold) {
+    # cat("La matrice è mal condizionata: Numero di condizionamento elevato\n")
+    # cat("Numero di condizionamento:", kappa, "\n")
+    C <- C + 1e-5 * diag(nrow(C))
+    kappa2 <- calc_condition_number(C)
+    
+    # Verifica delle condizioni
+    if (kappa2 > cond_number_threshold) {
+      # cat("La matrice è ancora mal condizionata: Numero di condizionamento elevato\n")
+      # cat("Numero di condizionamento:", kappa, "\n")
+      # cat("Numero di condizionamento post normalizzazione:", kappa2, "\n")
+    }
+  }
+
+  if (abs(det_C) < determinant_threshold) {
+    cat("La matrice è mal condizionata: Determinante molto piccolo\n")
+    cat("Determinante della matrice:", det_C, "\n")
+  }
+
+  if (any(abs(eigenvalues) < eigenvalue_threshold)) {
+    cat("La matrice è mal condizionata: Autovalori molto piccoli\n")
+    cat("Autovalori della matrice:", eigenvalues, "\n")
+  }
   
   
   unknownAreaIds <- sort(unique(unknown[,1]))
@@ -346,40 +382,6 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
       D[i] <- ataCov(sampleI[,2:4], curUnknown, ptVgm, longlat = longlat)
     }
 
-    # Soglie di mal condizionamento
-    cond_number_threshold <- 1e4
-    determinant_threshold <- 1e-10
-    eigenvalue_threshold <- 1e-10
-  
-    # Calcoli
-    kappa <- calc_condition_number(C)
-    det_C <- calc_determinant(C)
-    eigenvalues <- calc_eigenvalues(C)
-    
-    # Verifica delle condizioni
-    if (kappa > cond_number_threshold) {
-      # cat("La matrice è mal condizionata: Numero di condizionamento elevato\n")
-      # cat("Numero di condizionamento:", kappa, "\n")
-      C <- C + 1e-5 * diag(nrow(C))
-      kappa2 <- calc_condition_number(C)
-      
-      # Verifica delle condizioni
-      if (kappa2 > cond_number_threshold) {
-        # cat("La matrice è ancora mal condizionata: Numero di condizionamento elevato\n")
-        # cat("Numero di condizionamento:", kappa, "\n")
-        # cat("Numero di condizionamento post normalizzazione:", kappa2, "\n")
-      }
-    }
-  
-    if (abs(det_C) < determinant_threshold) {
-      cat("La matrice è mal condizionata: Determinante molto piccolo\n")
-      cat("Determinante della matrice:", det_C, "\n")
-    }
-  
-    if (any(abs(eigenvalues) < eigenvalue_threshold)) {
-      cat("La matrice è mal condizionata: Autovalori molto piccoli\n")
-      cat("Autovalori della matrice:", eigenvalues, "\n")
-    }
 
     
     # solving
@@ -391,6 +393,9 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     #   wmu <- MASS::ginv(C) %*% D
     #   solvedByGInv <- TRUE
     # }
+
+    C <- round(C, 3)
+    
     wmu <- MASS::ginv(C) %*% D
     # wmu <- solve_via_svd(C,D)
     

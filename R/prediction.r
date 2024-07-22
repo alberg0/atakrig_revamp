@@ -411,7 +411,7 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
       
       cat(c("valore stimato: ", yest))
       cat(c("\n10 valori wmu piu` influenti: ", w[sorted_indices[1:10]]))
-      cat(c("\nassociati a LST: ", as.matrix(x[[unknownVarId]]$areaValues[sorted_indices[1:10],c(1,4)]))
+      cat(c("\nassociati a LST: ", as.matrix(x[[unknownVarId]]$areaValues[sorted_indices[1:10],c(1,4)])))
       cat(c("\nposizione in wmu (area ID): ", sorted_indices[1:10]))
       cat(c("\ncorrispondenti valori in C (riga): ", C[sorted_indices[1:10],]))
       cat(c("\ncorrispondenti valori in C (colonna): ", C[,sorted_indices[1:10]]))

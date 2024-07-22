@@ -368,16 +368,16 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     
     # solving
     # cat("Solving system for unknown area ID: ", unknownAreaIds[k], "\n")
-    solvedByGInv <- FALSE
-    wmu <- try(solve(C, D), FALSE)
-    if(is(wmu, "try-error")) {
-      cat("Solving by GInv\n")
-      wmu <- MASS::ginv(C) %*% D
-      solvedByGInv <- TRUE
-    }
+    # solvedByGInv <- FALSE
+    # wmu <- try(solve(C, D), FALSE)
+    # if(is(wmu, "try-error")) {
+    #   cat("Solving by GInv\n")
+    #   wmu <- MASS::ginv(C) %*% D
+    #   solvedByGInv <- TRUE
+    # }
 
-    
-    # wmu <- MASS::ginv(C) %*% D
+    C_inv <- MASS::ginv(C)
+    wmu <- C_inv %*% D
     # wmu <- solve_via_svd(C,D)
     
     # estimation
@@ -413,8 +413,7 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
       cat(c("\n10 valori wmu piu` influenti: ", w[sorted_indices[1:10]]))
       cat(c("\nassociati a LST: ", as.matrix(x[[unknownVarId]]$areaValues[sorted_indices[1:10],c(1,4)])))
       cat(c("\nposizione in wmu (area ID): ", sorted_indices[1:10]))
-      cat(c("\ncorrispondenti valori in C (riga): ", C[sorted_indices[1:10],]))
-      cat(c("\ncorrispondenti valori in C (colonna): ", C[,sorted_indices[1:10]]))
+      cat(c("\ncorrispondenti valori in C_inv (riga): ", C_inv[sorted_indices[1:10],]))
       cat(c("\ncorrispondenti valori in D: ", D[sorted_indices[1:10]]))
     }
     if(!clarkAntiLog)

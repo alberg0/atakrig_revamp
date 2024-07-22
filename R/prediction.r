@@ -406,7 +406,7 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     }
     yvar <- ataCov(curUnknown, curUnknown, ptVgms[[unknownVarId]], longlat = longlat) - sum(wmu * D)
 
-    if(yest > 1000){
+    if(abs(yest) > 1000){
       sorted_indices <- order(abs(w1), decreasing = TRUE)
       
       cat(c("valore stimato: ", yest))

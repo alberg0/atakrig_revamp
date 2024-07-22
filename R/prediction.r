@@ -376,7 +376,7 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     #   solvedByGInv <- TRUE
     # }
     C_sparse <- Matrix(C, sparse = TRUE)
-    C_inv <- solve(sparse_mat)
+    C_inv <- solve(C_sparse)
     wmu <- C_inv %*% D
     # wmu <- solve_via_svd(C,D)
     

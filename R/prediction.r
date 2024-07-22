@@ -346,10 +346,10 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
   if (kappa > cond_number_threshold) {
     # cat("La matrice è mal condizionata: Numero di condizionamento elevato\n")
     # cat("Numero di condizionamento:", kappa, "\n")
-    C <- C + 1e-5 * diag(nrow(C))
+    C <- round(C, 3)
+    C <- C + 1e-3 * diag(nrow(C))
   }
   
-  C <- round(C, 3)
   
   unknownAreaIds <- sort(unique(unknown[,1]))
   

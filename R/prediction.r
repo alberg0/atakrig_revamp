@@ -375,8 +375,8 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     #   wmu <- MASS::ginv(C) %*% D
     #   solvedByGInv <- TRUE
     # }
-
-    C_inv <- MASS::ginv(C)
+    C_sparse <- Matrix(C, sparse = TRUE)
+    C_inv <- solve(sparse_mat)
     wmu <- C_inv %*% D
     # wmu <- solve_via_svd(C,D)
     
@@ -437,7 +437,7 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     estResults <-
       foreach(k = 1:length(unknownAreaIds), .combine = rbind, .options.snow=list(progress=progress),
               .export = c("D","meanVal","crossName","ataCov","calcAreaCentroid", "spDistsNN"),
-              .packages = c("sp","gstat")) %dopar% {
+              .packages = c("sp","gstat", "Matrix")) %dopar% {
                 krigOnce(k)
               }
     ataClusterClearObj()

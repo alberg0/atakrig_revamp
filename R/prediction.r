@@ -349,6 +349,7 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     C <- C + 1e-5 * diag(nrow(C))
   }
   
+  C <- round(C, 3)
   
   unknownAreaIds <- sort(unique(unknown[,1]))
   
@@ -364,7 +365,6 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
 
 
     
-    C <- round(C, 3)
     
     # solving
     # cat("Solving system for unknown area ID: ", unknownAreaIds[k], "\n")
@@ -407,10 +407,10 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
     yvar <- ataCov(curUnknown, curUnknown, ptVgms[[unknownVarId]], longlat = longlat) - sum(wmu * D)
 
     if(abs(yest) > 1000){
-      sorted_indices <- order(abs(w1), decreasing = TRUE)
+      sorted_indices <- order(abs(w), decreasing = TRUE)
       
       cat(c("valore stimato: ", yest))
-      cat(c("\n10 valori wmu piu` influenti: ", w1[sorted_indices[1:10]]))
+      cat(c("\n10 valori wmu piu` influenti: ", w[sorted_indices[1:10]]))
       cat(c("\nassociati a LST: ", x[[unknownVarId]]$areaValues[sorted_indices[1:10],]))
       cat(c("\nposizione in wmu (area ID): ", sorted_indices[1:10]))
       cat(c("\ncorrispondenti valori in C (riga): ", C[sorted_indices[1:10],]))

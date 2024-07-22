@@ -341,22 +341,12 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
 
   # Calcoli
   kappa <- calc_condition_number(C)
-  det_C <- calc_determinant(C)
-  eigenvalues <- calc_eigenvalues(C)
   
   # Verifica delle condizioni
   if (kappa > cond_number_threshold) {
     # cat("La matrice è mal condizionata: Numero di condizionamento elevato\n")
     # cat("Numero di condizionamento:", kappa, "\n")
     C <- C + 1e-5 * diag(nrow(C))
-    kappa2 <- calc_condition_number(C)
-    
-    # Verifica delle condizioni
-    if (kappa2 > cond_number_threshold) {
-      # cat("La matrice è ancora mal condizionata: Numero di condizionamento elevato\n")
-      # cat("Numero di condizionamento:", kappa, "\n")
-      # cat("Numero di condizionamento post normalizzazione:", kappa2, "\n")
-    }
   }
 
   if (abs(det_C) < determinant_threshold) {
@@ -384,19 +374,20 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
 
 
     
-    # solving
-    # cat("Solving system for unknown area ID: ", unknownAreaIds[k], "\n")
-    # solvedByGInv <- FALSE
-    # wmu <- try(solve(C, D), FALSE)
-    # if(is(wmu, "try-error")) {
-    #   cat("Solving by GInv\n")
-    #   wmu <- MASS::ginv(C) %*% D
-    #   solvedByGInv <- TRUE
-    # }
-
     C <- round(C, 3)
     
-    wmu <- MASS::ginv(C) %*% D
+    # solving
+    # cat("Solving system for unknown area ID: ", unknownAreaIds[k], "\n")
+    solvedByGInv <- FALSE
+    wmu <- try(solve(C, D), FALSE)
+    if(is(wmu, "try-error")) {
+      cat("Solving by GInv\n")
+      wmu <- MASS::ginv(C) %*% D
+      solvedByGInv <- TRUE
+    }
+
+    
+    # wmu <- MASS::ginv(C) %*% D
     # wmu <- solve_via_svd(C,D)
     
     # estimation
@@ -424,7 +415,18 @@ ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALS
       yest <- sum(w * x[[unknownVarId]]$areaValues[,4])
     }
     yvar <- ataCov(curUnknown, curUnknown, ptVgms[[unknownVarId]], longlat = longlat) - sum(wmu * D)
-    
+
+    if(yest > 1000){
+      sorted_indices <- order(abs(w1), decreasing = TRUE)
+      
+      cat(c("valore stimato: ", yest))
+      cat(c("\n10 valori wmu piu` influenti: ", w1[sorted_indices[1:10]]))
+      cat(c("\nassociati a LST: ", x[[unknownVarId]]$areaValues[sorted_indices[1:10],]))
+      cat(c("\nposizione in wmu (area ID): ", sorted_indices[1:10]))
+      cat(c("\ncorrispondenti valori in C (riga): ", C[sorted_indices[1:10],]))
+      cat(c("\ncorrispondenti valori in C (colonna): ", C[,sorted_indices[1:10]]))
+      cat(c("\ncorrispondenti valori in D: ", D[sorted_indices[1:10]]))
+    }
     if(!clarkAntiLog)
       return(data.frame(areaId=unknownAreaIds[k], pred=yest, var=yvar))
     else

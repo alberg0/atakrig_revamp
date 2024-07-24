@@ -257,6 +257,7 @@ ataKriging.local <- function(x, unknown, ptVgm, nmax=10, longlat=FALSE, showProg
 ataCoKriging <- function(x, unknownVarId, unknown, ptVgms, nmax=10, longlat=FALSE, oneCondition=FALSE,
                          meanVal=NULL, auxRatioAdj=TRUE, showProgress=FALSE, nopar=FALSE, clarkAntiLog=FALSE) {
   
+  library(Matrix)
     
   stopifnot(nmax > 0)
   
